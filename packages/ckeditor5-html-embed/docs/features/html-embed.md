@@ -5,13 +5,20 @@ menu-title: HTML embed
 
 # HTML embed
 
-The {@link module:html-embed/htmlembed~HtmlEmbed} plugin provides the possibility to insert a HTML codeinto the rich-text editor.
+The {@link module:html-embed/htmlembed~HtmlEmbed} plugin provides the possibility to insert a HTML code into the CKEditor 5 WYSIWYG editor.
 
 ## Demo
 
 Use the editor below to see the {@link module:html-embed/htmlembed~HtmlEmbed} plugin in action.
 
 {@snippet features/html-embed}
+
+## Related features
+
+CKEditor 5 supports a wider range of paste features, including:
+* {@link features/paste-plaintext Paste plain text} &ndash; Detects when a plain text is pasted and acts accordingly.
+* {@link features/paste-from-word Paste from Word} &ndash; Allows you to paste content from Microsoft Word and maintain the original structure and formatting.
+* {@link features/paste-from-google-docs Paste from Google Docs} &ndash; Allows you to paste content from Google Docs maintaining the original formatting and structure.
 
 ## Installation
 
