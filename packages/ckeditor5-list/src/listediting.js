@@ -68,6 +68,10 @@ export default class ListEditing extends Plugin {
 			allowAttributes: [ 'listType', 'listIndent' ]
 		} );
 
+		// editor.model.schema.extend( 'paragraph', {
+		// 	allowAttributes: [ 'listType', 'listIndent', 'listItemId' ]
+		// } );
+
 		// Converters.
 		const data = editor.data;
 		const editing = editor.editing;

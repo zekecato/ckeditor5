@@ -17,6 +17,8 @@ import {
 	positionAfterUiElements
 } from './utils';
 
+import { uid } from 'ckeditor5/src/utils';
+
 /**
  * A model-to-view converter for the `listItem` model element insertion.
  *
@@ -368,28 +370,51 @@ export function viewModelConverter( evt, data, conversionApi ) {
 	if ( conversionApi.consumable.consume( data.viewItem, { name: true } ) ) {
 		const writer = conversionApi.writer;
 
-		// 1. Create `listItem` model element.
-		const listItem = writer.createElement( 'listItem' );
+		let parentItem;
+		let lastUid;
 
-		// 2. Handle `listItem` model element attributes.
-		const indent = getIndent( data.viewItem );
+		for ( const child of data.viewItem.getChildren() ) {
+			const conversionResult = conversionApi.convertItem( child, data.modelCursor );
+			const element = data.modelCursor.nodeAfter;
 
-		writer.setAttribute( 'listIndent', indent, listItem );
+			let indent = getIndent( data.viewItem );
+			let type = getListType( data.viewItem.parent );
 
-		// Set 'bulleted' as default. If this item is pasted into a context,
-		const type = data.viewItem.parent && data.viewItem.parent.name == 'ol' ? 'numbered' : 'bulleted';
-		writer.setAttribute( 'listType', type, listItem );
+			if ( child.is( 'element' ) ) {
+				const isChildList = child.name === 'ol' || child.name === 'ul';
 
-		if ( !conversionApi.safeInsert( listItem, data.modelCursor ) ) {
-			return;
+				// When converting block items inside the `<li>` element, all children should follow the same `listItemId` attribute.
+				// The rule should not be applied if the child is a new (nested) list.
+				if ( !parentItem || isChildList || parentItem !== child.parent ) {
+					lastUid = uid();
+				}
+
+				// Re-calculate the `listIndent` and `listType` attributes when inserting the new list.
+				if ( isChildList ) {
+					indent = getIndent( child );
+					type = getListType( data.viewItem );
+				}
+
+				data.modelRange = conversionResult.modelRange;
+			} else {
+				lastUid = uid();
+			}
+
+			writer.setAttribute( 'listItemId', lastUid, element );
+			writer.setAttribute( 'listIndent', indent, element );
+
+			// It may happen that the same code is called more than once. As for now, IDK why.
+			if ( !element.getAttribute( 'listType' ) ) {
+				writer.setAttribute( 'listType', type, element );
+			}
+
+			conversionApi.updateConversionResult( element, data );
+			parentItem = child.parent;
 		}
+	}
 
-		const nextPosition = viewToModelListItemChildrenConverter( listItem, data.viewItem.getChildren(), conversionApi );
-
-		// Result range starts before the first item and ends after the last.
-		data.modelRange = writer.createRange( data.modelCursor, nextPosition );
-
-		conversionApi.updateConversionResult( listItem, data );
+	function getListType( viewItem ) {
+		return viewItem && viewItem.name == 'ol' ? 'numbered' : 'bulleted';
 	}
 }
 
@@ -600,23 +625,23 @@ export function modelChangePostFixer( model, writer ) {
 				// In case of renamed element.
 				const item = entry.position.nodeAfter;
 
-				if ( item.hasAttribute( 'listIndent' ) ) {
-					writer.removeAttribute( 'listIndent', item );
-
-					applied = true;
-				}
-
-				if ( item.hasAttribute( 'listType' ) ) {
-					writer.removeAttribute( 'listType', item );
-
-					applied = true;
-				}
-
-				if ( item.hasAttribute( 'listStyle' ) ) {
-					writer.removeAttribute( 'listStyle', item );
-
-					applied = true;
-				}
+				// if ( item.hasAttribute( 'listIndent' ) ) {
+				// 	writer.removeAttribute( 'listIndent', item );
+				//
+				// 	applied = true;
+				// }
+				//
+				// if ( item.hasAttribute( 'listType' ) ) {
+				// 	writer.removeAttribute( 'listType', item );
+				//
+				// 	applied = true;
+				// }
+				//
+				// if ( item.hasAttribute( 'listStyle' ) ) {
+				// 	writer.removeAttribute( 'listStyle', item );
+				//
+				// 	applied = true;
+				// }
 
 				for ( const innerItem of Array.from( model.createRangeIn( item ) ).filter( e => e.item.is( 'element', 'listItem' ) ) ) {
 					_addListToFix( innerItem.previousPosition );

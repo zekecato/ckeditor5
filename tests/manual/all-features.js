@@ -44,13 +44,14 @@ import CloudServices from '@ckeditor/ckeditor5-cloud-services/src/cloudservices'
 import ImageUpload from '@ckeditor/ckeditor5-image/src/imageupload';
 
 import { CS_CONFIG } from '@ckeditor/ckeditor5-cloud-services/tests/_utils/cloud-services-config';
+import { getData } from '@ckeditor/ckeditor5-engine/src/dev-utils/model';
 
 ClassicEditor
 	.create( document.querySelector( '#editor' ), {
 		plugins: [
 			ArticlePluginSet, Underline, Strikethrough, Superscript, Subscript, Code, RemoveFormat,
 			FontColor, FontBackgroundColor, FontFamily, FontSize, Highlight,
-			CodeBlock, TodoList, ListStyle, TableProperties, TableCellProperties,
+			CodeBlock, TodoList, /*ListStyle,*/ TableProperties, TableCellProperties,
 			EasyImage, ImageResize, LinkImage, AutoImage, HtmlEmbed,
 			AutoLink, Mention, TextTransformation,
 			Alignment, IndentBlock,
@@ -165,42 +166,7 @@ ClassicEditor
 	.then( editor => {
 		window.editor = editor;
 
-		editor.plugins.get( 'WordCount' ).on( 'update', ( evt, stats ) => {
-			console.log( `Characters: ${ stats.characters }, words: ${ stats.words }.` );
-		} );
-
-		document.getElementById( 'clear-content' ).addEventListener( 'click', () => {
-			editor.setData( '' );
-		} );
-
-		// The "Print editor data" button logic.
-		document.getElementById( 'print-data-action' ).addEventListener( 'click', () => {
-			const iframeElement = document.getElementById( 'print-data-container' );
-
-			/* eslint-disable max-len */
-			iframeElement.srcdoc = '<html>' +
-				'<head>' +
-					`<title>${ document.title }</title>` +
-					'<link rel="stylesheet" href="https://ckeditor.com/docs/ckeditor5/latest/snippets/features/page-break/snippet.css" type="text/css">' +
-				'</head>' +
-				'<body class="ck-content">' +
-					editor.getData() +
-					'<script>' +
-						'window.addEventListener( \'DOMContentLoaded\', () => { window.print(); } );' +
-					'</script>' +
-				'</body>' +
-			'</html>';
-			/* eslint-enable max-len */
-		} );
-
-		const button = document.getElementById( 'read-only' );
-
-		button.addEventListener( 'click', () => {
-			editor.isReadOnly = !editor.isReadOnly;
-			button.textContent = editor.isReadOnly ? 'Turn off read-only mode' : 'Turn on read-only mode';
-
-			editor.editing.view.focus();
-		} );
+		window.getModelData = () => getData( editor.model );
 	} )
 	.catch( err => {
 		console.error( err.stack );
