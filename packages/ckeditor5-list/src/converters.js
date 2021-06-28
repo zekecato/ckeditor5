@@ -367,50 +367,65 @@ export function modelViewMergeAfter( evt, data, conversionApi ) {
  * @param {module:engine/conversion/upcastdispatcher~UpcastConversionApi} conversionApi Conversion interface to be used by the callback.
  */
 export function viewModelConverter( evt, data, conversionApi ) {
-	if ( conversionApi.consumable.consume( data.viewItem, { name: true } ) ) {
-		const writer = conversionApi.writer;
+	if ( !conversionApi.consumable.consume( data.viewItem, { name: true } ) ) {
+		return;
+	}
 
-		let parentItem;
-		let lastUid;
+	const writer = conversionApi.writer;
 
-		for ( const child of data.viewItem.getChildren() ) {
-			const conversionResult = conversionApi.convertItem( child, data.modelCursor );
-			const element = data.modelCursor.nodeAfter;
+	let parentItem;
+	let lastUid;
 
-			let indent = getIndent( data.viewItem );
-			let type = getListType( data.viewItem.parent );
+	for ( const child of data.viewItem.getChildren() ) {
+		const conversionResult = conversionApi.convertItem( child, data.modelCursor );
+		const element = data.modelCursor.nodeAfter;
 
-			if ( child.is( 'element' ) ) {
-				const isChildList = child.name === 'ol' || child.name === 'ul';
+		// Remove a node that cannot be a child of a list.
+		if ( !isAllowedBlockInListItem( element, conversionApi.schema ) ) {
+			// Ugly hack with using protected engine's API.
+			// Most probably the clean-up phase should be done earlier.
+			element._remove();
 
-				// When converting block items inside the `<li>` element, all children should follow the same `listItemId` attribute.
-				// The rule should not be applied if the child is a new (nested) list.
-				if ( !parentItem || isChildList || parentItem !== child.parent ) {
-					lastUid = uid();
-				}
+			continue;
+		}
 
-				// Re-calculate the `listIndent` and `listType` attributes when inserting the new list.
-				if ( isChildList ) {
-					indent = getIndent( child );
-					type = getListType( data.viewItem );
-				}
+		let indent = getIndent( data.viewItem );
+		let type = getListType( data.viewItem.parent );
 
-				data.modelRange = conversionResult.modelRange;
-			} else {
+		if ( child.is( 'element' ) ) {
+			const isChildList = child.name === 'ol' || child.name === 'ul';
+
+			// When converting block items inside the `<li>` element, all children should follow the same `listItemId` attribute.
+			// The rule should not be applied if the child is a new (nested) list.
+			if ( !parentItem || isChildList || parentItem !== child.parent ) {
 				lastUid = uid();
 			}
 
-			writer.setAttribute( 'listItemId', lastUid, element );
-			writer.setAttribute( 'listIndent', indent, element );
-
-			// It may happen that the same code is called more than once. As for now, IDK why.
-			if ( !element.getAttribute( 'listType' ) ) {
-				writer.setAttribute( 'listType', type, element );
+			// Re-calculate the `listIndent` and `listType` attributes when inserting the new list.
+			if ( isChildList ) {
+				indent = getIndent( child );
+				type = getListType( data.viewItem );
 			}
 
-			conversionApi.updateConversionResult( element, data );
-			parentItem = child.parent;
+			data.modelRange = conversionResult.modelRange;
+		} else {
+			lastUid = uid();
 		}
+
+		writer.setAttribute( 'listItemId', lastUid, element );
+		writer.setAttribute( 'listIndent', indent, element );
+
+		// It may happen that the same code is called more than once. As for now, IDK why.
+		if ( !element.getAttribute( 'listType' ) ) {
+			writer.setAttribute( 'listType', type, element );
+		}
+
+		conversionApi.updateConversionResult( element, data );
+		parentItem = child.parent;
+	}
+
+	function isAllowedBlockInListItem( element, schema ) {
+		return [ 'listType', 'listIndent', 'listItemId' ].every( attribute => schema.checkAttribute( element, attribute ) );
 	}
 
 	function getListType( viewItem ) {
@@ -1023,7 +1038,7 @@ function hoistNestedLists( nextIndent, modelRemoveStartPosition, viewRemoveStart
 // @param {module:engine/view/element~Element} viewElement
 // @returns {Boolean}
 function isList( viewElement ) {
-	return viewElement.is( 'element', 'ol' ) || viewElement.is( 'element', 'ul' );
+	return viewElement.is( 'element', 'ol' ) || viewElement.is( 'element', 'ul' ) || viewElement.parent.is( 'element', 'li' );
 }
 
 // Calculates the indent value for a list item. Handles HTML compliant and non-compliant lists.

@@ -68,10 +68,6 @@ export default class ListEditing extends Plugin {
 			allowAttributes: [ 'listType', 'listIndent' ]
 		} );
 
-		// editor.model.schema.extend( 'paragraph', {
-		// 	allowAttributes: [ 'listType', 'listIndent', 'listItemId' ]
-		// } );
-
 		// Converters.
 		const data = editor.data;
 		const editing = editor.editing;
@@ -194,7 +190,15 @@ export default class ListEditing extends Plugin {
 	 * @inheritDoc
 	 */
 	afterInit() {
-		const commands = this.editor.commands;
+		const editor = this.editor;
+		const commands = editor.commands;
+
+		// Enable the document list on all block content.
+		for ( const definition of getBlockDefinitions( editor.model.schema ) ) {
+			editor.model.schema.extend( definition.name, {
+				allowAttributes: [ 'listType', 'listIndent', 'listItemId' ]
+			} );
+		}
 
 		const indent = commands.get( 'indent' );
 		const outdent = commands.get( 'outdent' );
@@ -221,4 +225,15 @@ function getViewListItemLength( element ) {
 	}
 
 	return length;
+}
+
+/**
+ * Returns an array containing block items that can be a child of a list item.
+ *
+ * @param {module:engine/model/schema~Schema} schema
+ * @return {Array.<module:engine/model/schema~SchemaCompiledItemDefinition>}
+ */
+function getBlockDefinitions( schema ) {
+	return Object.values( schema.getDefinitions() )
+		.filter( definition => !definition.name.startsWith( '$' ) && definition.isBlock );
 }
