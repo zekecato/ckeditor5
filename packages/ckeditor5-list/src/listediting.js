@@ -13,6 +13,8 @@ import IndentCommand from './indentcommand';
 import { Plugin } from 'ckeditor5/src/core';
 import { Enter } from 'ckeditor5/src/enter';
 import { Delete } from 'ckeditor5/src/typing';
+import { TreeWalker } from 'ckeditor5/src/engine';
+import { uid } from 'ckeditor5/src/utils';
 
 import {
 	cleanList,
@@ -123,15 +125,53 @@ export default class ListEditing extends Plugin {
 		// If Enter key is pressed with selection collapsed in empty list item, outdent it instead of breaking it.
 		this.listenTo( viewDocument, 'enter', ( evt, data ) => {
 			const doc = this.editor.model.document;
-			const positionParent = doc.selection.getLastPosition().parent;
+			const position = doc.selection.getLastPosition();
+			const positionParent = position.parent;
 
-			if ( doc.selection.isCollapsed && positionParent.name == 'listItem' && positionParent.isEmpty ) {
+			// Do nothing for the non-collapsed selection.
+			if ( !doc.selection.isCollapsed ) {
+				return;
+			}
+
+			// Do nothing if an element is not empty.
+			if ( !positionParent.isEmpty ) {
+				return;
+			}
+
+			// And do nothing if the element is not a part of a list.
+			if ( !isListBlock( positionParent ) ) {
+				return;
+			}
+
+			// Find the last block item in the current handled list item.
+			const allBlockItems = findListBlocksInListItem( position );
+			const lastBlockItem = allBlockItems[ allBlockItems.length - 1 ];
+
+			// Whether an action was applied.
+			let applied;
+
+			// If the selection is in the empty last block, we have two situations to handle:
+			// 1. Transform the last block in a list into a new list item.
+			// 2. Decrease the indent level.
+			//
+			// The first happens if pressed the `enter` key in the last empty block item.
+			// The second occurs if the block was the only one item in the list item.
+			if ( areRepresentingSameList( positionParent, positionParent.previousSibling ) && lastBlockItem === positionParent ) {
+				this.editor.model.change( writer => {
+					writer.setAttribute( 'listItemId', this._getElementUniqueId(), positionParent );
+				} );
+
+				applied = true;
+			} else if ( allBlockItems.length === 1 ) {
 				this.editor.execute( 'outdentList' );
+				applied = true;
+			}
 
+			if ( applied ) {
 				data.preventDefault();
 				evt.stop();
 			}
-		}, { context: 'li' } );
+		} /* , { context: 'li' } */ );
 
 		// Overwrite default Backspace key behavior.
 		// If Backspace key is pressed with selection collapsed on first position in first list item, outdent it. #83
@@ -211,6 +251,18 @@ export default class ListEditing extends Plugin {
 			outdent.registerChildCommand( commands.get( 'outdentList' ) );
 		}
 	}
+
+	/**
+	 * Used only for mocking the `uid()` function's output.
+	 *
+	 * TODO: Move to the ListUtils plugin.
+	 *
+	 * @protected
+	 * @returns {String}
+	 */
+	_getElementUniqueId() {
+		return uid();
+	}
 }
 
 function getViewListItemLength( element ) {
@@ -227,6 +279,11 @@ function getViewListItemLength( element ) {
 	return length;
 }
 
+// ----------------------------------------------------------------------------------------------------------------------------
+// -- TODO: Extract these utils to a new plugin: ListUtils.
+// -- `ListEditing._getElementUniqueId()` should be moved as well.
+// ----------------------------------------------------------------------------------------------------------------------------
+
 /**
  * Returns an array containing block items that can be a child of a list item.
  *
@@ -236,4 +293,58 @@ function getViewListItemLength( element ) {
 function getBlockDefinitions( schema ) {
 	return Object.values( schema.getDefinitions() )
 		.filter( definition => !definition.name.startsWith( '$' ) && definition.isBlock );
+}
+
+/**
+ * Checks whether specified blocks belong to the same list item.
+ *
+ * @param {module:engine/model/element~Element} blockA
+ * @param {module:engine/model/element~Element} blockB
+ * @return {Boolean}
+ */
+function areRepresentingSameList( blockA, blockB ) {
+	if ( !blockB ) {
+		return false;
+	}
+
+	return blockA.getAttribute( 'listItemId' ) === blockB.getAttribute( 'listItemId' );
+}
+
+/**
+ * Checks whether the specified `element` is a list item.
+ *
+ * @param {module:engine/model/element~Element} element
+ * @return {Boolean}
+ */
+function isListBlock( element ) {
+	return element.hasAttribute( 'listItemId' );
+}
+
+/**
+ * Returns an array containing all block items that belong to the single list item.
+ *
+ * @param {module:engine/model/position~Position} position
+ * @return {Array.<module:engine/model/element~Element>}
+ */
+function findListBlocksInListItem( position ) {
+	const listItemId = position.parent.getAttribute( 'listItemId' );
+
+	return [
+		...getSimilarListItem( 'backward' ).reverse(),
+		...getSimilarListItem( 'forward' )
+	];
+
+	function getSimilarListItem( direction ) {
+		const options = {
+			ignoreElementEnd: true,
+			startPosition: position,
+			shallow: true,
+			direction
+		};
+
+		return [ ...new TreeWalker( options ) ]
+			.filter( value => value.item.is( 'element' ) )
+			.map( value => value.item )
+			.filter( element => element.getAttribute( 'listItemId' ) === listItemId );
+	}
 }

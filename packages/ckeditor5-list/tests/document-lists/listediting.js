@@ -3,9 +3,9 @@
  * For licensing, see LICENSE.md or https://ckeditor.com/legal/ckeditor-oss-license
  */
 
-import ListEditing from '../src/listediting';
-import ListCommand from '../src/listcommand';
-import IndentCommand from '../src/indentcommand';
+import ListEditing from '../../src/listediting';
+import ListCommand from '../../src/listcommand';
+import IndentCommand from '../../src/indentcommand';
 
 import ModelRange from '@ckeditor/ckeditor5-engine/src/model/range';
 
@@ -26,16 +26,18 @@ import TableEditing from '@ckeditor/ckeditor5-table/src/tableediting';
 import Paragraph from '@ckeditor/ckeditor5-paragraph/src/paragraph';
 import testUtils from '@ckeditor/ckeditor5-core/tests/_utils/utils';
 
-describe( 'Document lists / ListEditing', () => {
-	let editor, model, modelDoc, modelRoot, view, viewDoc, viewRoot;
+
+describe.only( 'Document lists / ListEditing', () => {
+	let editor, model, modelDoc, modelRoot, view, viewDoc, viewRoot, listEditing;
 
 	testUtils.createSinonSandbox();
 
 	beforeEach( () => {
 		return VirtualTestEditor
 			.create( {
-				plugins: [ Paragraph, IndentEditing, ClipboardPipeline, BoldEditing, ListEditing, UndoEditing, BlockQuoteEditing,
-					TableEditing ]
+				plugins: [
+					Paragraph, IndentEditing, ClipboardPipeline, BoldEditing, ListEditing, UndoEditing, BlockQuoteEditing, TableEditing
+				]
 			} )
 			.then( newEditor => {
 				editor = newEditor;
@@ -48,12 +50,7 @@ describe( 'Document lists / ListEditing', () => {
 				viewDoc = view.document;
 				viewRoot = viewDoc.getRoot();
 
-				model.schema.register( 'foo', {
-					allowWhere: '$block',
-					allowAttributes: [ 'listIndent', 'listType' ],
-					isBlock: true,
-					isObject: true
-				} );
+				listEditing = editor.plugins.get( ListEditing );
 
 				// Stub `view.scrollToTheSelection` as it will fail on VirtualTestEditor without DOM.
 				sinon.stub( view, 'scrollToTheSelection' ).callsFake( () => {} );
@@ -4843,4 +4840,229 @@ describe( 'Document lists / ListEditing', () => {
 	// 		return model.createSelection( ranges );
 	// 	}
 	// }
+
+	describe( 'Enter integration', () => {
+		let domEvtDataStub;
+
+		beforeEach( () => {
+			domEvtDataStub = {
+				preventDefault() {}
+			};
+		} );
+
+		describe( 'creating a new block inside a list item', () => {
+			it( 'when pressing enter if the selection is at the end of the first block inside a list item', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.[]</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 2.</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 2.</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter if the selection is at the beginning of the second block inside a list item', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]Block item 2.</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted"></paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]Block item 2.</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter if the selection is in an empty block between non-empty blocks', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 2.</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted"></paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 2.</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter if the selection is at the beginning of the non-empty list item', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]Block item 1.</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted"></paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]Block item 1.</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter if the selection is at the end of the non-empty list item', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.[]</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter if the non-collapsed selection is inside the list item', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block[ item ]1.</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]1.</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter if the collapsed selection is inside the list item', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item []1.</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item </paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]1.</paragraph>'
+				);
+			} );
+		} );
+
+		describe( 'creating a new list item', () => {
+			it( 'when pressing enter if the selection is in the last block which is empty', () => {
+				sinon.stub( listEditing, '_getElementUniqueId' ).returns( 'e222' );
+
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e222" listType="bulleted">[]</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter if the selection is in the last block which is empty (an empty list item exists below)', () => {
+				sinon.stub( listEditing, '_getElementUniqueId' ).returns( 'e333' );
+
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e222" listType="bulleted"></paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e333" listType="bulleted">[]</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e222" listType="bulleted"></paragraph>'
+				);
+			} );
+		} );
+
+		describe( 'outdent a list item', () => {
+			it( 'when pressing enter in the empty list item, the indent level decreases', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e222" listType="bulleted">Block item 1.1</paragraph>' +
+					'<paragraph listIndent="2" listItemId="e333" listType="bulleted">[]</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e222" listType="bulleted">Block item 1.1</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e333" listType="bulleted">[]</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter in the empty list item, the indent level decreases (an empty list item exists below)', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e2220" listType="bulleted">Block item 1.1</paragraph>' +
+					'<paragraph listIndent="2" listItemId="e333" listType="bulleted">[]</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e2221" listType="bulleted">Block item 1.2</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e2220" listType="bulleted">Block item 1.1</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e333" listType="bulleted">[]</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e2221" listType="bulleted">Block item 1.2</paragraph>'
+				);
+			} );
+
+			it( 'when pressing enter in the empty list item, the indent level decreases', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e222" listType="bulleted">Block item 1.1</paragraph>' +
+					'<paragraph listIndent="2" listItemId="e333" listType="bulleted">[]</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e222" listType="bulleted">Block item 1.1</paragraph>' +
+					'<paragraph listIndent="1" listItemId="e333" listType="bulleted">[]</paragraph>'
+				);
+			} );
+
+			it( 'removes the list item if pressed enter in empty block in the highest level list', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph listIndent="0" listItemId="e222" listType="bulleted">[]</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">Block item 1.</paragraph>' +
+					'<paragraph>[]</paragraph>'
+				);
+			} );
+
+			it( 'removes the entire list if pressed enter in empty block in the highest level list', () => {
+				setModelData( model,
+					'<paragraph listIndent="0" listItemId="e111" listType="bulleted">[]</paragraph>'
+				);
+
+				editor.editing.view.document.fire( 'enter', domEvtDataStub );
+
+				expect( getModelData( model ) ).to.equal(
+					'<paragraph>[]</paragraph>'
+				);
+			} );
+		} );
+	} );
 } );

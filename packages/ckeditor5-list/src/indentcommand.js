@@ -61,7 +61,7 @@ export default class IndentCommand extends Command {
 			let next = lastItem.nextSibling;
 
 			// Check all items after last indented item, as long as their indent is bigger than indent of that item.
-			while ( next && next.name == 'listItem' && next.getAttribute( 'listIndent' ) > lastItem.getAttribute( 'listIndent' ) ) {
+			while ( isListBlock( next ) && next.getAttribute( 'listIndent' ) > lastItem.getAttribute( 'listIndent' ) ) {
 				itemsToChange.push( next );
 
 				next = next.nextSibling;
@@ -84,7 +84,10 @@ export default class IndentCommand extends Command {
 					// To keep the model as correct as possible, first rename listItem, then remove attributes,
 					// as listItem without attributes is very incorrect and will cause problems in converters.
 					// No need to remove attributes, will be removed by post fixer.
-					writer.rename( item, 'paragraph' );
+					// writer.rename( item, 'paragraph' );
+					writer.removeAttribute( 'listType', item );
+					writer.removeAttribute( 'listIndent', item );
+					writer.removeAttribute( 'listItemId', item );
 				}
 				// If indent is >= 0, change the attribute value.
 				else {
@@ -116,7 +119,7 @@ export default class IndentCommand extends Command {
 		const listItem = first( this.editor.model.document.selection.getSelectedBlocks() );
 
 		// If selection is not in a list item, the command is disabled.
-		if ( !listItem || !listItem.is( 'element', 'listItem' ) ) {
+		if ( !isListBlock( listItem ) ) {
 			return false;
 		}
 
@@ -128,7 +131,7 @@ export default class IndentCommand extends Command {
 
 			let prev = listItem.previousSibling;
 
-			while ( prev && prev.is( 'element', 'listItem' ) && prev.getAttribute( 'listIndent' ) >= indent ) {
+			while ( isListBlock( prev ) && prev.getAttribute( 'listIndent' ) >= indent ) {
 				if ( prev.getAttribute( 'listIndent' ) == indent ) {
 					// The item is on the same level.
 					// If it has same type, it means that we found a preceding sibling from the same list.
@@ -147,4 +150,14 @@ export default class IndentCommand extends Command {
 		// If we are outdenting it is enough to be in list item. Every list item can always be outdented.
 		return true;
 	}
+}
+
+/**
+ * Checks whether the specified `element` is a list item.
+ *
+ * @param {module:engine/model/element~Element|null} element
+ * @return {Boolean}
+ */
+function isListBlock( element ) {
+	return element && element.is( 'element' ) && element.hasAttribute( 'listItemId' );
 }
