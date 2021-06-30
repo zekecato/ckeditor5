@@ -122,94 +122,10 @@ export default class ListEditing extends Plugin {
 		const viewDocument = editing.view.document;
 
 		// Overwrite default Enter key behavior.
-		// If Enter key is pressed with selection collapsed in empty list item, outdent it instead of breaking it.
-		this.listenTo( viewDocument, 'enter', ( evt, data ) => {
-			const doc = this.editor.model.document;
-			const position = doc.selection.getLastPosition();
-			const positionParent = position.parent;
-
-			// Do nothing for the non-collapsed selection.
-			if ( !doc.selection.isCollapsed ) {
-				return;
-			}
-
-			// Do nothing if an element is not empty.
-			if ( !positionParent.isEmpty ) {
-				return;
-			}
-
-			// And do nothing if the element is not a part of a list.
-			if ( !isListBlock( positionParent ) ) {
-				return;
-			}
-
-			// Find the last block item in the current handled list item.
-			const allBlockItems = findListBlocksInListItem( position );
-			const lastBlockItem = allBlockItems[ allBlockItems.length - 1 ];
-
-			// Whether an action was applied.
-			let applied;
-
-			// If the selection is in the empty last block, we have two situations to handle:
-			// 1. Transform the last block in a list into a new list item.
-			// 2. Decrease the indent level.
-			//
-			// The first happens if pressed the `enter` key in the last empty block item.
-			// The second occurs if the block was the only one item in the list item.
-			if ( areRepresentingSameList( positionParent, positionParent.previousSibling ) && lastBlockItem === positionParent ) {
-				this.editor.model.change( writer => {
-					writer.setAttribute( 'listItemId', this._getElementUniqueId(), positionParent );
-				} );
-
-				applied = true;
-			} else if ( allBlockItems.length === 1 ) {
-				this.editor.execute( 'outdentList' );
-				applied = true;
-			}
-
-			if ( applied ) {
-				data.preventDefault();
-				evt.stop();
-			}
-		} /* , { context: 'li' } */ );
+		this.listenTo( viewDocument, 'enter', getEnterHandlingCallback( editor ) /* , { context: 'li' } */ );
 
 		// Overwrite default Backspace key behavior.
-		// If Backspace key is pressed with selection collapsed on first position in first list item, outdent it. #83
-		this.listenTo( viewDocument, 'delete', ( evt, data ) => {
-			// Check conditions from those that require less computations like those immediately available.
-			if ( data.direction !== 'backward' ) {
-				return;
-			}
-
-			const selection = this.editor.model.document.selection;
-
-			if ( !selection.isCollapsed ) {
-				return;
-			}
-
-			const firstPosition = selection.getFirstPosition();
-
-			if ( !firstPosition.isAtStart ) {
-				return;
-			}
-
-			const positionParent = firstPosition.parent;
-
-			if ( positionParent.name !== 'listItem' ) {
-				return;
-			}
-
-			const previousIsAListItem = positionParent.previousSibling && positionParent.previousSibling.name === 'listItem';
-
-			if ( previousIsAListItem ) {
-				return;
-			}
-
-			this.editor.execute( 'outdentList' );
-
-			data.preventDefault();
-			evt.stop();
-		}, { context: 'li' } );
+		this.listenTo( viewDocument, 'delete', getDeleteHandlingCallback( editor ) /* , { context: 'li' } */ );
 
 		const getCommandExecuter = commandName => {
 			return ( data, cancel ) => {
@@ -277,6 +193,114 @@ function getViewListItemLength( element ) {
 	}
 
 	return length;
+}
+
+// ----------------------------------------------------------------------------------------------------------------------------
+//
+// Returns a callback that handles the `Enter` key.
+//
+// @param {module:core/editor/editor~Editor} editor
+// @return {Function}
+function getEnterHandlingCallback( editor ) {
+	// TODO: Use `ListUtils` here.
+	const listUtils = editor.plugins.get( 'ListEditing' );
+
+	return ( evt, data ) => {
+		const doc = editor.model.document;
+		const position = doc.selection.getLastPosition();
+		const positionParent = position.parent;
+
+		// Do nothing for the non-collapsed selection.
+		if ( !doc.selection.isCollapsed ) {
+			return;
+		}
+
+		// Do nothing if an element is not empty.
+		if ( !positionParent.isEmpty ) {
+			return;
+		}
+
+		// And do nothing if the element is not a part of a list.
+		if ( !isListBlock( positionParent ) ) {
+			return;
+		}
+
+		// Find the last block item in the current handled list item.
+		const allBlockItems = findListBlocksInListItem( position );
+		const lastBlockItem = allBlockItems[ allBlockItems.length - 1 ];
+
+		// Whether an action was applied.
+		let applied;
+
+		// If the selection is in the empty last block, we have two situations to handle:
+		// 1. Transform the last block in a list into a new list item.
+		// 2. Decrease the indent level.
+		//
+		// The first happens if pressed the `enter` key in the last empty block item.
+		// The second occurs if the block was the only one item in the list item.
+		if ( areRepresentingSameList( positionParent, positionParent.previousSibling ) && lastBlockItem === positionParent ) {
+			editor.model.change( writer => {
+				writer.setAttribute( 'listItemId', listUtils._getElementUniqueId(), positionParent );
+			} );
+
+			applied = true;
+		} else if ( allBlockItems.length === 1 ) {
+			editor.execute( 'outdentList' );
+			applied = true;
+		}
+
+		if ( applied ) {
+			data.preventDefault();
+			evt.stop();
+		}
+	};
+}
+
+// Returns a callback that handles the `Delete` / `Backspace` keys.
+//
+// @param {module:core/editor/editor~Editor} editor
+// @return {Function}
+function getDeleteHandlingCallback( editor ) {
+	// If Backspace key is pressed with selection collapsed on first position in first list item, outdent it. #83
+
+	// TODO: Use `ListUtils` here.
+	const listUtils = editor.plugins.get( 'ListEditing' );
+
+	return ( evt, data ) => {
+		// Check conditions from those that require less computations like those immediately available.
+		if ( data.direction !== 'backward' ) {
+			return;
+		}
+
+		const selection = editor.model.document.selection;
+
+		if ( !selection.isCollapsed ) {
+			return;
+		}
+
+		const firstPosition = selection.getFirstPosition();
+
+		if ( !firstPosition.isAtStart ) {
+			return;
+		}
+
+		const positionParent = firstPosition.parent;
+
+		if ( positionParent.name !== 'listItem' ) {
+			return;
+		}
+
+		const previousIsAListItem = positionParent.previousSibling && positionParent.previousSibling.name === 'listItem';
+
+		if ( previousIsAListItem ) {
+			return;
+		}
+
+		editor.execute( 'outdentList' );
+
+		data.preventDefault();
+		evt.stop();
+	};
 }
 
 // ----------------------------------------------------------------------------------------------------------------------------

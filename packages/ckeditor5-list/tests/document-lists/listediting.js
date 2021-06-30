@@ -5065,4 +5065,16 @@ describe.only( 'Document lists / ListEditing', () => {
 			} );
 		} );
 	} );
+
+	describe( 'Delete integration', () => {
+		let domEvtDataStub;
+
+		beforeEach( () => {
+			domEvtDataStub = {
+				preventDefault() {}
+			};
+		} );
+
+		it('removes a letter if in')
+	} );
 } );
